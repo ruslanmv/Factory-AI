@@ -42,7 +42,7 @@ We welcome contributions to the development of Factory App AI. If you would like
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for more details.
+This project is licensed under the MIT License. See the [LICENSE](./LICENSE.txt) file for more details.
 
 ## Conclusion
 
