@@ -1,0 +1,200 @@
+<html>
+  <head>
+    <title>AI App Factory 🏭</title>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@3.1.6/dist/full.css" rel="stylesheet" type="text/css" />
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,typography,aspect-ratio"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/iframe-resizer/4.3.2/iframeResizer.contentWindow.min.js"></script>
+  </head>
+  <body>
+    <div class="flex flex-col md:flex-row" x-data="app()" x-init="init()">
+      <div
+        class="hero md:h-screen bg-stone-100 transition-[width] delay-150 ease-in-out"
+        :class="open ? 'w-full md:w-2/6' : 'w-full md:w-6/6'"
+      >
+        <div class="hero-content text-center">
+          <div class="flex flex-col w-full md:max-w-xl space-y-3 md:space-y-6">
+            <h1
+              class="font-bold text-stone-600 mb-1 md:mb-3 transition-all delay-150 ease-in-out"
+              :class="open
+              ? 'text-2xl md:text-3xl lg:text-4xl'
+              : 'text-2xl md:text-3xl lg:text-6xl'"
+            >
+              AI App Factory 🏭
+            </h1>
+            <div
+              class="py-1 md:py-2 space-y-2 md:space-y-3 text-stone-600 transition-all delay-150 ease-in-out"
+              :class="open
+              ? 'text-lg lg:text-xl'
+              : 'text-lg lg:text-xl'"
+            >
+              <p>A space to generate Hugging Face Spaces using a LLM.</p>
+              <p>The Space will be created under your name, so please provide a valid Hugging Face token (with <span class="font-bold font-mono text-sm text-red-900">WRITE</span> access).</p>
+            </div>
+            <input
+              name="token"
+              type="password"
+              x-model="token"
+              placeholder="Your Hugging Face token"
+              class="input w-full rounded text-stone-800 bg-stone-50 border-2 border-stone-400 font-mono text-md md:text-lg"
+            />
+            <textarea
+              name="promptDraft"
+              x-model="promptDraft"
+              rows="10"
+              placeholder="Describe your web app"
+              class="input w-full rounded text-stone-800 bg-stone-50 border-2 border-stone-400 font-mono text-md md:text-lg h-24 md:h-48"
+            ></textarea>
+            <p class="py-1 md:py-2 text-stone-700 text-italic">
+              Examples:
+
+              <a href="/?prompt=a simple todo list app using nextjs" class="text-bold underline">todo list using nextjs</a>,
+              <a href="/?prompt=a simple html page for a cookie recipe" class="text-bold underline">cookie recipe</a>
+            </p>
+            <button
+              class="btn disabled:text-stone-400"
+              @click="open = true, saveToken(token), prompt = promptDraft, state = state === 'stopped' ? 'loading' : 'stopped', state === 'streaming' ? stopGeneration() : true"
+              :class="promptDraft.length < minPromptSize ? 'btn-neutral' : state === 'stopped' ? 'btn-accent' : 'btn-warning'"
+              :disabled="promptDraft.length < minPromptSize"
+            >
+              <span x-show="promptDraft.length < minPromptSize">Prompt too short to generate</span>
+              <span x-show="promptDraft.length >= minPromptSize && state !== 'stopped'">Stop now</span>
+              <span x-show="promptDraft.length >= minPromptSize && state === 'stopped'">Generate!</span>
+            </button>
+            <div class="flex flex-col text-stone-700 space-y-1 md:space-y-2">
+              <p class="text-stone-700">
+                Model used:
+                <a href="https://huggingface.co/codellama/CodeLlama-34b-Instruct-hf" class="underline" target="_blank">
+                  codellama/CodeLlama-34b-Instruct-hf
+                </a>
+              </p>
+              <p>Powered by 🤗 <a href="https://huggingface.co/inference-api" class="underline" target="_blank">Inference API</a></p>
+              <p class="text-stone-700" x-show="state === 'loading'">
+                Waiting for the generation to begin (might take a few minutes)..
+              </p>
+              <p class="text-stone-700" x-show="state === 'streaming'">
+                Content size: <span x-text="humanFileSize(size, true, 2)"></span>. This version generates up
+                to 4096 tokens.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div
+        class="flex flex-col transition-[width] delay-150 ease-in-out md:h-screen"
+        :class="open ? 'w-full md:w-4/6' : 'w-full md:w-0'"
+      >
+        <iframe
+          id="iframe"
+          class="border-none w-full md:min-h-screen"
+          :src="!open
+            ? '/placeholder.html'
+            : `/app?prompt=${encodeURIComponent(prompt)}&token=${encodeURIComponent(token)}`
+          "
+        ></iframe>
+
+        <div
+          x-show="state !== 'stopped'"
+          class="flex w-full -mt-20 items-end justify-center pointer-events-none">
+          <div class="flex flex-row py-3 px-8 text-center bg-stone-200 text-stone-600 rounded-md shadow-md">
+            <div class="animate-bounce duration-150 mr-1">🤖</div>
+            <div>Generating your app..</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script>
+      /**
+       * Format bytes as human-readable text.
+       *
+       * @param bytes Number of bytes.
+       * @param si True to use metric (SI) units, aka powers of 1000. False to use
+       *           binary (IEC), aka powers of 1024.
+       * @param dp Number of decimal places to display.
+       *
+       * @return Formatted string.
+       */
+      function humanFileSize(bytes, si = false, dp = 1) {
+        const thresh = si ? 1000 : 1024;
+
+        if (Math.abs(bytes) < thresh) {
+          return bytes + " B";
+        }
+
+        const units = si
+          ? ["kB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"]
+          : ["KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB", "YiB"];
+        let u = -1;
+        const r = 10 ** dp;
+
+        do {
+          bytes /= thresh;
+          ++u;
+        } while (Math.round(Math.abs(bytes) * r) / r >= thresh && u < units.length - 1);
+
+        return bytes.toFixed(dp) + " " + units[u];
+      }
+
+      function stopGeneration() {
+        console.log("stopping generation..");
+        document?.getElementById("iframe")?.contentWindow?.stop?.();
+      }
+
+      function app() {
+
+        const storageKey = "SPACE_FACTORY_ACCESS_TOKEN"
+
+        return {
+          open: false,
+          promptDraft:
+            new URLSearchParams(window.location.search).get("prompt") || '',
+          prompt: "",
+          token: localStorage.getItem(storageKey) || "",
+          size: 0,
+          minPromptSize: 16, // if you change this, you will need to also change in src/index.mts
+          timeoutInSec: 15, // time before we determine something went wrong
+          state: "stopped",
+          lastTokenAt: +new Date(),
+          saveToken(token) {
+            localStorage.setItem(storageKey, token)
+          },
+          init() {
+            setInterval(() => {
+              if (this.state === "stopped") {
+                this.lastTokenAt = +new Date();
+                return;
+              }
+              const html = document?.getElementById("iframe")?.contentWindow?.document?.documentElement?.outerHTML;
+              const size = Number(html?.length); // count how many characters we have generated
+
+              if (isNaN(size) || !isFinite(size)) {
+                this.size = 0;
+                this.state = "loading";
+                return;
+              }
+
+              this.state = "streaming";
+
+              const now = +new Date();
+              const newSize = new Blob([html]).size;
+              const hasChanged = newSize !== this.size;
+
+              if (hasChanged) {
+                this.lastTokenAt = now;
+              }
+
+              this.size = newSize;
+     
+              const timeSinceLastUpdate = (now - this.lastTokenAt) / 1000;
+
+              if (timeSinceLastUpdate > this.timeoutInSec) {
+                console.log(`no changes detected for the past ${this.timeoutInSec} seconds -> considering we're done`);
+                this.state = "stopped";
+              }
+            }, 100);
+          },
+        };
+      }
+    </script>
+  </body>
+</html>
